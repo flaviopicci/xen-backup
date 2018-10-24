@@ -10,9 +10,10 @@ from multiprocessing.pool import Pool
 
 import yaml
 
-from handlers.vm import VMHandler
+from handlers import vm
+from handlers.pool import Pool as XenPool
 from lib import XenAPI
-from lib.functions import get_vms_to_backup, exit_gracefully
+from lib.functions import exit_gracefully
 
 max_subproc = 2
 exit_code = 0
@@ -32,26 +33,27 @@ def backup(name, master, username, password, delta, backup_new_snap=True, exclud
     else:
         try:
             xapi = session.xenapi
-            vms = VMHandler(xapi, master_url, session.handle)
+            session_id = session.handle
 
-            vm_refs = get_vms_to_backup(vms, excluded_vms=excluded_vms, vm_uuid_list=vm_uuid_list)
-            num_vms = len(vm_refs)
+            pool = XenPool(xapi)
+            vms, num_vms = vm.get_vms_to_backup(
+                xapi, master_url, session_id, excluded_vms=excluded_vms, vm_uuid_list=vm_uuid_list)
 
-            logger.info("Backing up %d VMs in pool %s", num_vms, name)
+            logger.info("Backing up %d VMs in pool %s", num_vms, pool.get_label())
 
             return_status["failed_vms"] = {}
-            for v, vm_ref in enumerate(vm_refs):
+            for v, vm in enumerate(vms):
                 if delta:
-                    vms.backup_delta(vm_ref, return_status["failed_vms"], base_folder, v, num_vms)
-                    vms.clean_delta_backups(vm_ref, base_folder, backups_to_retain)
+                    vm.backup_delta(return_status["failed_vms"], base_folder, v, num_vms)
+                    vm.clean_delta_backups(base_folder, backups_to_retain)
                 else:
-                    vms.backup(vm_ref, return_status["failed_vms"], base_folder, v, num_vms, backup_new_snap)
-                    vms.clean_backups(vm_ref, base_folder, backups_to_retain)
+                    vm.backup(return_status["failed_vms"], base_folder, v, num_vms, backup_new_snap)
+                    vm.clean_backups(base_folder, backups_to_retain)
 
             if len(return_status["failed_vms"]) == 0:
-                logger.info("Backup of %d VMs in pool %s completed", num_vms, name)
+                logger.info("Backup of %d VMs in pool %s completed", num_vms, pool.get_label())
             else:
-                logger.error("Backup of %d VMs in pool %s completed with errors:", num_vms, name)
+                logger.error("Backup of %d VMs in pool %s completed with errors:", num_vms, pool.get_label())
                 for vm_error in return_status["failed_vms"].values():
                     logger.error(vm_error)
         except IOError as e:
@@ -122,8 +124,8 @@ if __name__ == "__main__":
 
     logger.info("Backing up %d Xen pool(s)", len(config["pools"]))
 
-    backup_procs = []
-    proc_pool = Pool(processes=max_subproc)
+    backup_procs = {}
+    proc_pool = Pool(max_subproc)
     for pool_config in config["pools"]:
         pool_config["delta"] = (args.type == "delta")
         if base_back_dir is not None:
@@ -135,7 +137,7 @@ if __name__ == "__main__":
         if args.vm_uuid is not None:
             pool_config["vm_uuid_list"] = args.vm_uuid
 
-        backup_procs.append({"name": pool_config["name"], "result": proc_pool.apply_async(backup, kwds=pool_config)})
+        backup_procs[pool_config["name"]] = proc_pool.apply_async(backup, kwds=pool_config)
 
     proc_pool.close()
     try:
@@ -147,11 +149,11 @@ if __name__ == "__main__":
         "subject": config["mail"]["subject"].format(args.type.title()),
         "body": {}
     }
-    for backup_proc in backup_procs:
+    for pool_name, result in backup_procs.items():
         try:
-            backup_status = backup_proc["result"].get(10)
+            backup_status = result.get()
         except (SystemExit, multiprocessing.context.TimeoutError):
-            logger.error("Backup process '%s' aborted", backup_proc["name"])
+            logger.error("Backup process '%s' aborted", pool_name)
         else:
             mail_pool_content = {
                 "errors": [],
@@ -165,7 +167,7 @@ if __name__ == "__main__":
                 mail_pool_content["vms"] = list(backup_status["failed_vms"].values())
 
             mail_content["body"].update({
-                backup_proc["name"]: mail_pool_content
+                pool_name: mail_pool_content
             })
 
     with open(config["mail"]["content"], "w") as mail_file:

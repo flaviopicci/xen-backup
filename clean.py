@@ -1,6 +1,5 @@
 import argparse
 import logging.config
-import os
 import signal
 import sys
 from http.client import CannotSendRequest
@@ -8,9 +7,9 @@ from multiprocessing.pool import Pool
 
 import yaml
 
-from handlers.vm import VMHandler
+from handlers.vm import get_vms_to_backup
 from lib import XenAPI
-from lib.functions import get_vms_to_backup, exit_gracefully
+from lib.functions import exit_gracefully
 
 max_subproc = 2
 exit_code = 0
@@ -28,11 +27,11 @@ def clean_all(name, master, username, password, excluded_vms=None):
         try:
             logger.info("Cleaning backup snapshots in pool %s", name)
             xapi = session.xenapi
-            vms = VMHandler(xapi, master_url, session.handle)
+            session_id = session.handle
 
-            for vm_ref in get_vms_to_backup(vms, excluded_vms):
-                for snap_ref in vms.get_backup_snapshots(vm_ref):
-                    vms.destroy(snap_ref)
+            for vm in get_vms_to_backup(xapi, master_url, session_id, excluded_vms):
+                for snap in vm.get_backup_snapshots():
+                    snap.destroy()
         finally:
             try:
                 session.xenapi.session.logout()

@@ -1,15 +1,19 @@
-from handlers.common import CommonHandler
+from handlers.common import Common
 
 
-class VbdHandler(CommonHandler):
-    def __init__(self, xapi):
-        super().__init__(xapi.VBD)
+class VBD(Common):
+    _type = "VBD"
 
-    def get_type(self, vbd_ref):
-        return self.xapi.get_type(vbd_ref)
+    def __init__(self, xapi, ref=None, params=None):
+        super().__init__(xapi, ref, params)
 
-    def get_vdi(self, vbd_ref):
-        return self.xapi.get_VDI(vbd_ref)
+    def get_type(self):
+        return self.xapi.get_type(self.ref)
 
-    def get_vm(self, vbd_ref):
-        return self.xapi.get_VM(vbd_ref)
+    def get_vdi_ref(self):
+        vdi_ref = self.xapi.get_VDI(self.ref)
+        if vdi_ref != "OpaqueRef:NULL":
+            return vdi_ref  # VDI(self._xapi, self.master_url, self.session_id, vdi_ref)
+
+    def get_vm(self):
+        return self.xapi.get_VM(self.ref)

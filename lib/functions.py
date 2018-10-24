@@ -1,9 +1,13 @@
 import json
+import logging
 import os
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 
 from lib.datetime_encoder import DateTimeEncoder
+
+logger = logging.getLogger("Utils")
+vdi_file_format = "vhd"
 
 
 def exit_gracefully(signum, _):
@@ -37,7 +41,7 @@ def get_vms_to_backup(vms, excluded_vms=None, vm_ref_list=None, vm_uuid_list=Non
             if vm_ref is not None:
                 try:
                     vm_refs.remove(vm_ref)
-                except KeyError as e:
+                except KeyError:
                     pass
     return vm_refs
 
@@ -54,22 +58,23 @@ def vm_definition_from_file(backup_def_fn):
         return json.load(backup_def_file)
 
 
-def timestamp_to_datetime(ts_string, to_str=True, from_format="%Y%m%dT%H:%M:%SZ", to_format="%Y%m%dT%H%M%SZ"):
+def timestamp_to_datetime(ts_string, to_str=True, from_format="%Y%m%dT%H:%M:%SZ", to_format="%Y%m%dT%H%M%S"):
     ts = datetime.strptime(ts_string, from_format)
+    ts = ts.replace(tzinfo=timezone.utc).astimezone()  # to local timezone
     return ts.strftime(to_format) if to_str else ts
 
 
-def get_timestamp(to_format="%Y%m%dT%H%M%SZ"):
-    return datetime_to_timestamp(datetime.utcnow(), to_format)
+def get_timestamp(to_format="%Y%m%dT%H%M%S"):
+    return datetime_to_timestamp(datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(), to_format)
 
 
-def datetime_to_timestamp(dt, to_format="%Y%m%dT%H%M%SZ"):
+def datetime_to_timestamp(dt, to_format="%Y%m%dT%H%M%S"):
     return dt.strftime(to_format)
 
 
 def random_xen_mac():
-    mac = [random.randint(0x00, 0xff) for x in range(0, 3)] + \
+    mac = [random.randint(0x00, 0xff) for _ in range(0, 3)] + \
           [random.randint(0x00, 0x7f)] + \
-          [random.randint(0x00, 0xff) for x in range(0, 2)]
+          [random.randint(0x00, 0xff) for _ in range(0, 2)]
     mac[0] = (mac[0] & 0xfc) | 0x02
     return ":".join(['{0:02x}'.format(x) for x in mac])

@@ -1,0 +1,18 @@
+mail:
+  host: smtp.mail.com
+  port: 587
+  user: user@mail.com
+  password: userPassword
+  from: xenbackup@mail.com
+  to:
+    - sysadmin@mail.com
+    - recipent@other.com
+  subject: "{} Xen backup failed"
+  content: mail.json
+pools:
+  - name: Xen pool
+    master: 192.168.0.256
+    username: xenuser
+    password: xenpassword
+    test_vm_uuid: vm-uuid-xxx
+backup_dir: ./
