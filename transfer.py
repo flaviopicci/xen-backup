@@ -3,12 +3,14 @@ import logging.config
 import os
 import signal
 import sys
-from datetime import datetime
 from http.client import CannotSendRequest
 from urllib.error import HTTPError
 
+from handlers.common import get_by_uuid, get_by_label
+from handlers.vm import VM, restore as restore_vm
 from lib import XenAPI
-from lib.functions import exit_gracefully, datetime_to_timestamp
+from lib.XenAPI import Failure
+from lib.functions import exit_gracefully, get_timestamp
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_gracefully)
@@ -52,71 +54,71 @@ if __name__ == '__main__':
         src_xapi = src_session.xenapi
         dst_xapi = dst_session.xenapi
 
-        src_vms = VMHandler(src_xapi, src_master_url, src_session.handle)
-        dst_vms = VMHandler(dst_xapi, dst_master_url, dst_session.handle)
+        src_s_id = src_session.handle
+        dst_s_id = dst_session.handle
 
         logger.info("Transferring %d VMs", len(args.uuid))
 
         for vm_uuid in args.uuid:
-            old_vm_ref = None
-            new_vm_ref = None
+            src_vm = None
+            dst_vm = None
+            power_state = "halt"
             try:
-                old_vm_ref = src_vms.get_by_uuid(vm_uuid)
-                if old_vm_ref is not None:
-                    vm_name = src_vms.get_label(old_vm_ref)
+                try:
+                    src_vm_ref = get_by_uuid(src_xapi.VM, vm_uuid)
+                except Failure:
+                    pass
+                else:
+                    src_vm = VM(src_xapi, src_master_url, src_s_id, src_vm_ref)
+                    vm_name = src_vm.get_label()
                     logger.info("Transferring VM %s", vm_name)
-                    vm_uuid = src_vms.get_uuid(old_vm_ref)
-                    power_state = src_vms.get_power_state(old_vm_ref)
+                    vm_uuid = src_vm.get_uuid()
+                    power_state = src_vm.get_power_state()
 
-                    if args.shutdown and not src_vms.is_halted(old_vm_ref):
+                    if args.shutdown and not src_vm.is_halted():
                         try:
-                            src_vms.shutdown(old_vm_ref)
+                            src_vm.shutdown()
                         except XenAPI.Failure as e:
                             logger.warning("Error shutting down VM")
 
-                    take_snapshot = not src_vms.can_export(old_vm_ref)
+                    take_snapshot = not src_vm.can_export()
 
-                    export_datetime = datetime.utcnow()
+                    export_datetime = get_timestamp(to_str=True)
                     # export_vm_name = "{} - backup {}".format(vm_name, datetime_to_timestamp(
                     #     export_datetime, to_format="%Y-%m-%d %H:%M:%S"))
-                    export_name = "{}__{}__{}".format(vm_uuid, datetime_to_timestamp(export_datetime), vm_name)
+                    export_name = "{}__{}__{}".format(vm_uuid, export_datetime, vm_name)
 
                     if take_snapshot:
-                        export_vm_ref = src_vms.snapshot(old_vm_ref, export_name)
-                        src_vms.set_is_template(export_vm_ref, False)
+                        src_vm = src_vm.snapshot(export_name)
+                        src_vm.set_is_template(False)
                     else:
-                        src_vms.set_name(old_vm_ref, export_name)
-                        export_vm_ref = old_vm_ref
+                        src_vm.set_name(export_name)
 
                     try:
-                        exported_file_name = src_vms.export(export_vm_ref, backup_dir, export_name, vm_name)
+                        exported_file_name = src_vm.export(backup_dir, export_name, vm_name)
                     finally:
                         if take_snapshot:
-                            src_vms.destroy(export_vm_ref)
+                            src_vm.destroy()
                         else:
-                            src_vms.set_name(export_vm_ref, vm_name)
+                            src_vm.set_name(vm_name)
 
-                    dst_vms.restore(exported_file_name, restore=args.restore)
+                    restore_vm(dst_xapi, dst_master_url, dst_s_id, exported_file_name, restore=args.restore)
 
-                    new_vm_ref = dst_vms.get_by_label(export_name)[0]
-                    dst_vms.set_name(new_vm_ref, vm_name)
-                    dst_vms.set_power_state(new_vm_ref, power_state)
+                    dst_vm = VM(dst_xapi, dst_master_url, dst_s_id, get_by_label(dst_xapi.VM, export_name)[0])
+                    dst_vm.set_name(vm_name)
+                    dst_vm.set_power_state(power_state)
 
                     os.remove(exported_file_name)
             except SystemExit:
                 logger.info("VM transfer aborted on user request")
-                if old_vm_ref is not None and (
-                                new_vm_ref is None or dst_vms.get_power_state(new_vm_ref) != power_state):
+                if src_vm is not None and (dst_vm is None or dst_vm.get_power_state() != power_state):
                     logger.info("Restoring old VM power state")
-                    src_vms.set_power_state(old_vm_ref, power_state)
-
-                break
+                    src_vm.set_power_state(power_state)
             except (ValueError, FileNotFoundError, HTTPError, IOError) as e:
                 logger.error("VM transfer failed %s", e)
-                if old_vm_ref is not None and (
-                                new_vm_ref is None or dst_vms.get_power_state(new_vm_ref) != power_state):
+                if src_vm is not None and (dst_vm is None or dst_vm.get_power_state() != power_state):
                     logger.info("Restoring old VM power state")
-                    src_vms.set_power_state(old_vm_ref, power_state)
+                    src_vm.set_power_state(power_state)
             else:
                 logger.info("VM transfer completed")
 

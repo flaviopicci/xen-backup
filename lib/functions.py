@@ -64,8 +64,9 @@ def timestamp_to_datetime(ts_string, to_str=True, from_format="%Y%m%dT%H:%M:%SZ"
     return ts.strftime(to_format) if to_str else ts
 
 
-def get_timestamp(to_format="%Y%m%dT%H%M%S"):
-    return datetime_to_timestamp(datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(), to_format)
+def get_timestamp(to_str=False, to_format="%Y%m%dT%H%M%S"):
+    ts = datetime.utcnow().replace(tzinfo=timezone.utc).astimezone()
+    return datetime_to_timestamp(ts, to_format) if to_str else ts
 
 
 def datetime_to_timestamp(dt, to_format="%Y%m%dT%H%M%S"):
