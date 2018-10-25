@@ -1,7 +1,4 @@
-import argparse
 import logging.config
-import signal
-import sys
 from http.client import CannotSendRequest
 from multiprocessing.pool import Pool
 
@@ -9,10 +6,11 @@ import yaml
 
 from handlers.vm import get_vms_to_backup
 from lib import XenAPI
-from lib.functions import exit_gracefully
+
+logging.config.fileConfig("log.conf")
+logger = logging.getLogger("Xen backup")
 
 max_subproc = 2
-exit_code = 0
 
 
 def clean_all(name, master, username, password, excluded_vms=None):
@@ -39,28 +37,16 @@ def clean_all(name, master, username, password, excluded_vms=None):
                 logger.exception("Xen logout failed")
 
 
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", type=str, help="Set configuration file", default="config.yml")
-    parser.add_argument("-t", "--type", type=str, help="Type of backup to perform", default="delta")
-
-    args = parser.parse_args()
+def clean(args):
     if args.type == "full":
         config_filename = args.config
-
-        logging.config.fileConfig("log.conf")
-        logger = logging.getLogger("Xen backup")
-
-        signal.signal(signal.SIGINT, exit_gracefully)
-        signal.signal(signal.SIGTERM, exit_gracefully)
 
         try:
             with open(config_filename, "r") as config_file:
                 config = yaml.load(config_file)
-        except Exception as ge:
-            logger.error("Error opening config file : %s", ge)
-            sys.exit(1)
+        except OSError as e:
+            logger.error("Error opening config file : %s", e)
+            raise e
 
         logger.info("Cleaning %d Xen pool(s)", len(config["pools"]))
 
@@ -75,5 +61,3 @@ if __name__ == "__main__":
             proc_pool.join()
         except SystemExit:
             logger.warning("Terminating backup")
-
-    sys.exit(exit_code)

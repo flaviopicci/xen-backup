@@ -1,7 +1,6 @@
-import argparse
+import logging.config
 import logging.config
 import os
-import signal
 import sys
 from http.client import CannotSendRequest
 from urllib.error import HTTPError
@@ -10,24 +9,10 @@ from handlers.common import get_by_uuid, get_by_label
 from handlers.vm import VM, restore as restore_vm
 from lib import XenAPI
 from lib.XenAPI import Failure
-from lib.functions import exit_gracefully, get_timestamp
+from lib.functions import get_timestamp
 
-if __name__ == '__main__':
-    signal.signal(signal.SIGINT, exit_gracefully)
-    signal.signal(signal.SIGTERM, exit_gracefully)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--src-master", type=str, help="Master host")
-    parser.add_argument("--dst-master", type=str, help="Master host")
-    parser.add_argument("-U", "--username", type=str, help="Username")
-    parser.add_argument("-P", "--password", type=str, help="Password")
-    parser.add_argument("-b", "--base-dir", type=str, help="Base backup directory")
-    parser.add_argument("-u", "--uuid", action="append", type=str, required=True)
-    parser.add_argument("-s", "--shutdown", action='store_true', help="Shutdown vm before exporting")
-    parser.add_argument("-r", "--restore", action='store_true', help="Perform full restore")
-    # parser.add_argument("-n", "--vm-name", type=str)
-
-    args = parser.parse_args()
+def transfer(args):
     username = args.username
     password = args.password
     backup_dir = args.base_dir

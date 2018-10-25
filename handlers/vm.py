@@ -111,21 +111,15 @@ class VM(CommonEntities):
     def get_vifs(self):
         return (VIF(self._xapi, vif_ref) for vif_ref in self.xapi.get_VIFs(self.ref))
 
-    def get_vbds(self, disk_only=False):
-        if disk_only:
-            return (
-                VBD(self._xapi, vbd_ref) for vbd_ref in self.xapi.get_VBDs(self.ref)
-                if not VBD(self._xapi, vbd_ref).get_type() != "Disk"
-            )
-        else:
-            return (
-                VBD(self._xapi, vbd_ref) for vbd_ref in self.xapi.get_VBDs(self.ref)
-            )
+    def get_vbds(self):
+        return (
+            VBD(self._xapi, vbd_ref) for vbd_ref in self.xapi.get_VBDs(self.ref)
+        )
 
     def get_vdis(self, disk_only=False):
         return (
-            VDI(self._xapi, self.master_url, self.session_id, vbd.get_vdi_ref()) for vbd in self.get_vbds(disk_only)
-            if vbd.get_vdi_ref() is not None
+            VDI(self._xapi, self.master_url, self.session_id, vbd.get_vdi_ref()) for vbd in self.get_vbds()
+            if vbd.get_vdi_ref(disk_only) is not None
         )
 
     def destroy(self, keep_vdis=None):
@@ -281,7 +275,7 @@ class VM(CommonEntities):
         try:
             for vbd in backup_snap.get_vbds():
                 backup_vbds[vbd.ref] = vbd.get_record()
-                vdi_ref = vbd.get_vdi_ref()
+                vdi_ref = vbd.get_vdi_ref(disk_only=True)
                 if vdi_ref is not None:
                     vdi = VDI(self._xapi, self.master_url, self.session_id, vdi_ref)
                     vdi_record = vdi.backup(base_folder, vm_back_dir, backup_vdis_map)

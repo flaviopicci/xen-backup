@@ -10,10 +10,6 @@ logger = logging.getLogger("Utils")
 vdi_file_format = "vhd"
 
 
-def exit_gracefully(signum, _):
-    raise SystemExit(signum)
-
-
 def get_saned_string(string):
     return string.replace(" ", "_").replace("/", "_")
 

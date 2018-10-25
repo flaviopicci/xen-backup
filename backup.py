@@ -1,10 +1,7 @@
-import argparse
 import json
 import logging.config
 import multiprocessing
 import os
-import signal
-import sys
 from http.client import CannotSendRequest
 from multiprocessing.pool import Pool
 
@@ -13,14 +10,13 @@ import yaml
 from handlers.pool import Pool as XenPool
 from handlers.vm import get_vms_to_backup
 from lib import XenAPI
-from lib.functions import exit_gracefully
 
-max_subproc = 2
-exit_code = 0
+logging.config.fileConfig("log.conf")
+logger = logging.getLogger("Xen backup")
 
 
-def backup(name, master, username, password, delta, backup_new_snap=True, excluded_vms=None, vm_uuid_list=None,
-           base_folder=".", backups_to_retain=1):
+def do_backup(name, master, username, password, delta, backup_new_snap=True, excluded_vms=None, vm_uuid_list=None,
+              base_folder=".", backups_to_retain=1):
     return_status = {}
     master_url = "https://" + master
 
@@ -73,34 +69,18 @@ def backup(name, master, username, password, delta, backup_new_snap=True, exclud
     return return_status
 
 
-if __name__ == "__main__":
+def backup(args):
+    error = False
+    max_subproc = 2
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", type=str, help="Set configuration file", default="config.yml")
-    parser.add_argument("-M", "--master", type=str, help="Master host")
-    parser.add_argument("-U", "--username", type=str, help="Username")
-    parser.add_argument("-P", "--password", type=str, help="Password")
-    parser.add_argument("-f", "--folder", type=str, help="Backup destination folder")
-    parser.add_argument("-t", "--type", type=str, help="Type of backup to perform", default="delta")
-    parser.add_argument("-n", "--new-snapshot", type=bool, help="Always perform new snapshot to backup")
-    parser.add_argument("-u", "--vm-uuid", type=str, action="append", help="UUIDs of the VMs to backup")
-    parser.add_argument("-b", "--backups-to-retain", type=int, help="Number of backups to retain")
-
-    args = parser.parse_args()
     config_filename = args.config
-
-    logging.config.fileConfig("log.conf")
-    logger = logging.getLogger("Xen backup")
-
-    signal.signal(signal.SIGINT, exit_gracefully)
-    signal.signal(signal.SIGTERM, exit_gracefully)
 
     try:
         with open(config_filename, "r") as config_file:
             config = yaml.load(config_file)
-    except Exception as ge:
-        logger.error("Error opening config file : %s", ge)
-        sys.exit(1)
+    except OSError as e:
+        logger.error("Error opening config file : %s", e)
+        raise e
 
     if args.master is not None and args.username is not None and args.password is not None:
         config["pools"] = [{
@@ -113,7 +93,7 @@ if __name__ == "__main__":
     if os.path.exists(config["mail"]["content"]):
         os.remove(config["mail"]["content"])
 
-    base_back_dir = args.folder if args.folder is not None else config[
+    base_back_dir = args.base_dir if args.base_dir is not None else config[
         args.type + "_backup_dir"] if args.type + "_backup_dir" in config else None
 
     backup_new_snap = args.new_snapshot if args.new_snapshot is not None else config[
@@ -134,10 +114,10 @@ if __name__ == "__main__":
             pool_config["backup_new_snap"] = backup_new_snap
         if backups_to_retain is not None:
             pool_config["backups_to_retain"] = backups_to_retain
-        if args.vm_uuid is not None:
-            pool_config["vm_uuid_list"] = args.vm_uuid
+        if args.uuid is not None:
+            pool_config["vm_uuid_list"] = args.uuid
 
-        backup_procs[pool_config["name"]] = proc_pool.apply_async(backup, kwds=pool_config)
+        backup_procs[pool_config["name"]] = proc_pool.apply_async(do_backup, kwds=pool_config)
 
     proc_pool.close()
     try:
@@ -151,19 +131,20 @@ if __name__ == "__main__":
     }
     for pool_name, result in backup_procs.items():
         try:
-            backup_status = result.get()
+            backup_status = result.get(10)
         except (SystemExit, multiprocessing.context.TimeoutError):
             logger.error("Backup process '%s' aborted", pool_name)
+            error = True
         else:
             mail_pool_content = {
                 "errors": [],
                 "vms": []
             }
             if "error" in backup_status:
-                exit_code = 1
+                error = True
                 mail_pool_content["errors"].append(backup_status["error"])
             if "failed_vms" in backup_status and len(backup_status["failed_vms"]) > 0:
-                exit_code = 1
+                error = True
                 mail_pool_content["vms"] = list(backup_status["failed_vms"].values())
 
             mail_content["body"].update({
@@ -173,4 +154,5 @@ if __name__ == "__main__":
     with open(config["mail"]["content"], "w") as mail_file:
         json.dump(mail_content, mail_file)
 
-    sys.exit(exit_code)
+    if error:
+        raise BaseException("An error occourred while performing backup")

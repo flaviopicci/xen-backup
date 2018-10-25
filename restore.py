@@ -1,12 +1,9 @@
-import argparse
-import cmd
 import logging.config
-import signal
 from http.client import CannotSendRequest
 
 from handlers import vm
 from lib import XenAPI
-from handlers.pool import Pool as XenPool
+
 
 # def restore(name, master, username, password, vm_file, auto_start=False, restore=False,
 #             sr=None, sr_map=None, network_map=None, delta=False, base_folder="."):
@@ -64,24 +61,9 @@ from handlers.pool import Pool as XenPool
 #     def do_EOF(self, line):
 #         return True
 #
-from lib.functions import exit_gracefully, vm_definition_from_file
 
-if __name__ == '__main__':
-    signal.signal(signal.SIGINT, exit_gracefully)
-    signal.signal(signal.SIGTERM, exit_gracefully)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-M", "--master", type=str, help="Master host")
-    parser.add_argument("-U", "--username", type=str, help="Username")
-    parser.add_argument("-P", "--password", type=str, help="Password")
-    parser.add_argument("-f", "--file", type=str, help="Backup XVA file or VM definition")
-    parser.add_argument("-b", "--base-dir", type=str, help="Base backup directory")
-    parser.add_argument("-t", "--type", type=str, help="Type of backup to perform", default="delta")
-    parser.add_argument("-r", "--restore", action='store_true', help="Type of backup to perform")
-    parser.add_argument("-n", "--network-map", type=str, action="append")
-    parser.add_argument("-s", "--storage-map", type=str, action="append")
-
-    args = parser.parse_args()
+def restore(args):
     username = args.username
     password = args.password
 
@@ -104,7 +86,8 @@ if __name__ == '__main__':
     try:
         session.xenapi.login_with_password(username, password)
     except (CannotSendRequest, XenAPI.Failure) as e:
-        logger.exception("Error logging in Xen host")
+        logger.error("Error logging in Xen host")
+        raise e
     else:
         try:
             if args.type == "delta":
