@@ -8,8 +8,8 @@ from _ssl import CERT_NONE
 from urllib import request
 from urllib.error import HTTPError
 
-from handlers import vdi, vif, common
-from handlers.common import CommonEntities, get_by_uuid, get_by_label
+from handlers import vdi, vif
+from handlers.common import CommonEntities, get_by_uuid, get_by_label, get_all_refs
 from handlers.task import Task
 from handlers.vbd import VBD
 from handlers.vdi import VDI
@@ -178,7 +178,6 @@ class VM(CommonEntities):
 
         return full_file_name
 
-
     def get_backup_snapshots(self, snap_type=""):
         return (snapshot for snapshot in self.get_snapshots()
                 if snapshot.get_label().startswith(self.backup_snap_prefix + snap_type))
@@ -282,8 +281,9 @@ class VM(CommonEntities):
         try:
             for vbd in backup_snap.get_vbds():
                 backup_vbds[vbd.ref] = vbd.get_record()
-                vdi = vbd.get_vdi()
-                if vdi is not None:
+                vdi_ref = vbd.get_vdi_ref()
+                if vdi_ref is not None:
+                    vdi = VDI(self._xapi, self.master_url, self.session_id, vdi_ref)
                     vdi_record = vdi.backup(base_folder, vm_back_dir, backup_vdis_map)
                     backup_vdis[vdi.ref] = vdi_record
 
@@ -346,7 +346,7 @@ class VM(CommonEntities):
                 for vbd_record in retain_vdis.values():
                     try:
                         # create new VBD
-                        VBD(self._xapi, None, None, params=vbd_record)
+                        VBD(self._xapi, params=vbd_record)
                     except Failure:
                         self.logger.exception("Error creating new VBD for missing backup VDI")
 
@@ -386,7 +386,7 @@ class VM(CommonEntities):
                 try:
                     os.remove(os.path.join(base_folder, vm_back_dir, vm_def_file))
                 except IOError as e:
-                    self.logger.error("Error deleteting VM definition file %s %s", vm_def_file, e.strerror)
+                    self.logger.error("Error deleting VM definition file %s %s", vm_def_file, e.strerror)
                 else:
                     self.logger.debug("VM definition file '%s' deleted", os.path.join(vm_back_dir, vm_def_file))
 
@@ -452,7 +452,7 @@ def restore_delta(xapi, master_url, session_id, vm_def_file, base_folder, sr_map
                 vbd_record["VDI"] = vdi_ref
 
             vbd_record["VM"] = vm.ref
-            VBD(xapi, master_url, session_id, params=vbd_record)
+            VBD(xapi, params=vbd_record)
 
         for vif_ref, vif_record in vm_definition["vifs"].items():
             vif_record["VM"] = vm.ref
@@ -471,10 +471,10 @@ def restore_delta(xapi, master_url, session_id, vm_def_file, base_folder, sr_map
     return vm.ref
 
 
-def get_all_vms(xapi, template=False, snapshot=False, control_domain=False):
+def get_all_vm_refs(xapi, template=False, snapshot=False, control_domain=False):
     vm_xapi = xapi.VM
     return [
-        vm_ref for vm_ref in vm_xapi.get_all()
+        vm_ref for vm_ref in get_all_refs(vm_xapi)
         if (snapshot or not vm_xapi.get_is_a_snapshot(vm_ref))
            and (template or not vm_xapi.get_is_a_template(vm_ref))
            and (control_domain or not vm_xapi.get_is_control_domain(vm_ref))
@@ -500,7 +500,7 @@ def get_vms_to_backup(xapi, master_url, session_id,
             vm_refs.update(get_by_label(xapi.VM, vm_label))
 
     if vm_ref_list is None and vm_uuid_list is None and vm_name_list is None:
-        vm_refs.update(get_all_vms(xapi))
+        vm_refs.update(get_all_vm_refs(xapi))
 
     if excluded_vms is not None:
         for vm_uuid in excluded_vms:
@@ -508,7 +508,7 @@ def get_vms_to_backup(xapi, master_url, session_id,
             if vm_ref is not None:
                 try:
                     vm_refs.remove(vm_ref)
-                except KeyError as e:
+                except KeyError:
                     pass
 
     return (VM(xapi, master_url, session_id, vm_ref) for vm_ref in vm_refs), len(vm_refs)

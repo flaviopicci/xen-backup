@@ -10,8 +10,8 @@ from multiprocessing.pool import Pool
 
 import yaml
 
-from handlers import vm
 from handlers.pool import Pool as XenPool
+from handlers.vm import get_vms_to_backup
 from lib import XenAPI
 from lib.functions import exit_gracefully
 
@@ -36,7 +36,7 @@ def backup(name, master, username, password, delta, backup_new_snap=True, exclud
             session_id = session.handle
 
             pool = XenPool(xapi)
-            vms, num_vms = vm.get_vms_to_backup(
+            vms, num_vms = get_vms_to_backup(
                 xapi, master_url, session_id, excluded_vms=excluded_vms, vm_uuid_list=vm_uuid_list)
 
             logger.info("Backing up %d VMs in pool %s", num_vms, pool.get_label())
