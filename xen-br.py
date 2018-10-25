@@ -1,8 +1,11 @@
 import argparse
+import logging.config
 import signal
 
 from backup import backup
 from clean import clean
+from export import export
+from lib import XenAPI
 from restore import restore
 from transfer import transfer
 
@@ -13,12 +16,16 @@ def exit_gracefully(signum, _):
 
 actions = {
     "backup": backup,
+    "export": export,
     "restore": restore,
     "transfer": transfer,
     "clean": clean
 }
 
 if __name__ == "__main__":
+    logging.config.fileConfig("log.conf", disable_existing_loggers=False)
+    logger = logging.getLogger("Main")
+
     signal.signal(signal.SIGINT, exit_gracefully)
     signal.signal(signal.SIGTERM, exit_gracefully)
 
@@ -35,6 +42,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--type", type=str, help="Type of backup to perform", default="delta")
     parser.add_argument("-n", "--new-snapshot", type=bool, help="Always perform new snapshot to backup")
     parser.add_argument("-u", "--uuid", type=str, action="append", help="UUIDs of the VMs to backup")
+    parser.add_argument("-v", "--vm-name", type=str)
     parser.add_argument("-b", "--backups-to-retain", type=int, help="Number of backups to retain")
     parser.add_argument("-r", "--restore", action='store_true', help="Perform full restore")
     parser.add_argument("-s", "--shutdown", action='store_true', help="Shutdown vm before exporting")
@@ -44,4 +52,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    actions[args.action](args)
+    try:
+        actions[args.action](args)
+    except (SystemExit, OSError, XenAPI.Failure, ValueError) as e:
+        logger.error(e)
+        exit(1)

@@ -1,6 +1,5 @@
 import logging
 
-from lib.XenAPI import Failure
 from lib.functions import timestamp_to_datetime, get_saned_string
 
 

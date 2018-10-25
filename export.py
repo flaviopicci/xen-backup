@@ -1,41 +1,24 @@
-import argparse
-import cmd
-import logging.config
-import signal
+import logging
+import sys
 from datetime import datetime, timezone
 from http.client import CannotSendRequest
-
-import sys
 from urllib.error import HTTPError
 
 from handlers.common import get_by_uuid, get_by_label
 from handlers.vm import VM
 from lib import XenAPI
-from lib.functions import exit_gracefully, datetime_to_timestamp
+from lib.functions import datetime_to_timestamp
 
-if __name__ == '__main__':
-    signal.signal(signal.SIGINT, exit_gracefully)
-    signal.signal(signal.SIGTERM, exit_gracefully)
+logger = logging.getLogger("Xen export")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-M", "--master", type=str, help="Master host")
-    parser.add_argument("-U", "--username", type=str, help="Username")
-    parser.add_argument("-P", "--password", type=str, help="Password")
-    parser.add_argument("-b", "--base-dir", type=str, help="Base backup directory")
-    parser.add_argument("-u", "--uuid", type=str)
-    parser.add_argument("-n", "--vm-name", type=str)
 
-    args = parser.parse_args()
+def export(args):
     username = args.username
     password = args.password
     backup_dir = args.base_dir
 
-    logging.config.fileConfig("log.conf")
-    logger = logging.getLogger("Xen backup")
-
     if args.uuid is None and args.vm_name is None:
-        logger.error("VM UUID or name required!")
-        sys.exit(1)
+        raise ValueError("VM UUID or name required!")
 
     master_url = "https://" + args.master
 
@@ -44,6 +27,7 @@ if __name__ == '__main__':
         session.xenapi.login_with_password(username, password)
     except (CannotSendRequest, XenAPI.Failure) as e:
         logger.exception("Error logging in Xen host")
+        raise e
     else:
         try:
             xapi = session.xenapi

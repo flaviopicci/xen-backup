@@ -181,7 +181,7 @@ def restore(xapi, master_url, session_id, vdi_record, base_back_dir, sr_map=None
         vdi_file = os.path.join(base_back_dir, vdi_record["backup_file"])
         vdi.import_data(vdi_name, vdi_file, "delta" if delta_restore else "full")
     except (HTTPError, IOError, SystemExit) as e:
-        logger.error("Error importing VDI %s", e.strerror)
+        logger.error("Error importing VDI %s", str(e))
         vdi.destroy()
         raise e
 
@@ -195,7 +195,7 @@ def clean(vdi_record, base_folder, delete):
         try:
             os.remove(os.path.join(base_folder, vdi_record["backup_file"]))
         except IOError as e:
-            logger.error("Error deleting VDI file %s %s", vdi_record["backup_file"], e.strerror)
+            logger.error("Error deleting VDI file %s %s", vdi_record["backup_file"], str(e))
         else:
             logger.debug("VDI file %s deleted", vdi_record["backup_file"])
     else:
@@ -214,7 +214,7 @@ def clean_unused(vm_back_dir, used_vdi_files):
                 try:
                     os.remove(os.path.join(dp, filename))
                 except IOError as e:
-                    logger.error("Error deleting VDI file %s %s", os.path.join(dp, filename), e.strerror)
+                    logger.error("Error deleting VDI file %s %s", os.path.join(dp, filename), str(e))
                 else:
                     logger.debug("VDI file %s deleted", os.path.join(dp, filename))
 

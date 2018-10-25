@@ -1,5 +1,4 @@
-import logging.config
-import logging.config
+import logging
 import os
 import sys
 from http.client import CannotSendRequest
@@ -11,18 +10,16 @@ from lib import XenAPI
 from lib.XenAPI import Failure
 from lib.functions import get_timestamp
 
+logger = logging.getLogger("Xen transfer")
+
 
 def transfer(args):
     username = args.username
     password = args.password
     backup_dir = args.base_dir
 
-    logging.config.fileConfig("log.conf")
-    logger = logging.getLogger("Xen backup")
-
     if args.uuid is None and args.vm_name is None:
-        logger.error("VM UUID or name required!")
-        sys.exit(1)
+        raise ValueError("VM UUID or name required!")
 
     src_master_url = "https://" + args.src_master
     dst_master_url = "https://" + args.dst_master
@@ -35,6 +32,7 @@ def transfer(args):
         dst_session.xenapi.login_with_password(username, password)
     except (CannotSendRequest, XenAPI.Failure) as e:
         logger.exception("Error logging in Xen host")
+        raise e
     else:
         src_xapi = src_session.xenapi
         dst_xapi = dst_session.xenapi

@@ -1,5 +1,5 @@
 import json
-import logging.config
+import logging
 import multiprocessing
 import os
 from http.client import CannotSendRequest
@@ -11,7 +11,6 @@ from handlers.pool import Pool as XenPool
 from handlers.vm import get_vms_to_backup
 from lib import XenAPI
 
-logging.config.fileConfig("log.conf")
 logger = logging.getLogger("Xen backup")
 
 
@@ -52,19 +51,16 @@ def do_backup(name, master, username, password, delta, backup_new_snap=True, exc
                 logger.error("Backup of %d VMs in pool %s completed with errors:", num_vms, pool.get_label())
                 for vm_error in return_status["failed_vms"].values():
                     logger.error(vm_error)
-        except IOError as e:
-            return_status["error"] = e.strerror
-            logger.warning("Backup of pool %s aborted. Error: %s", name, e.strerror)
-        except XenAPI.Failure as e:
-            return_status["error"] = e.details
-            logger.warning("Backup of pool %s aborted. Error: %s", name, e.details)
+        except (IOError, XenAPI.Failure) as e:
+            return_status["error"] = str(e)
+            logger.warning("Backup of pool %s aborted. Error: %s", name, str(e))
         except SystemExit:
             logger.warning("Backup of pool %s aborted  on external request", name)
         finally:
             try:
                 session.xenapi.session.logout()
             except (CannotSendRequest, XenAPI.Failure) as e:
-                logger.error("Xen logout failed: %s", e.details)
+                logger.error("Xen logout failed: %s", str(e))
 
     return return_status
 
@@ -155,4 +151,4 @@ def backup(args):
         json.dump(mail_content, mail_file)
 
     if error:
-        raise BaseException("An error occourred while performing backup")
+        raise SystemExit("An error occurred while performing backup")

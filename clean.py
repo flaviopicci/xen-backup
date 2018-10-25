@@ -1,4 +1,4 @@
-import logging.config
+import logging
 from http.client import CannotSendRequest
 from multiprocessing.pool import Pool
 
@@ -7,7 +7,6 @@ import yaml
 from handlers.vm import get_vms_to_backup
 from lib import XenAPI
 
-logging.config.fileConfig("log.conf")
 logger = logging.getLogger("Xen backup")
 
 max_subproc = 2
@@ -19,8 +18,9 @@ def clean_all(name, master, username, password, excluded_vms=None):
     session = XenAPI.Session(master_url, ignore_ssl=True)
     try:
         session.xenapi.login_with_password(username, password)
-    except (CannotSendRequest, XenAPI.Failure):
-        logger.exception("Error logging in Xen host")
+    except (CannotSendRequest, XenAPI.Failure) as e:
+        logger.error("Error logging in Xen host")
+        raise e
     else:
         try:
             logger.info("Cleaning backup snapshots in pool %s", name)
@@ -34,7 +34,7 @@ def clean_all(name, master, username, password, excluded_vms=None):
             try:
                 session.xenapi.session.logout()
             except (CannotSendRequest, XenAPI.Failure):
-                logger.exception("Xen logout failed")
+                logger.error("Xen logout failed")
 
 
 def clean(args):

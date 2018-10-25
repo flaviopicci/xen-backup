@@ -1,9 +1,8 @@
-import logging.config
+import logging
 from http.client import CannotSendRequest
 
 from handlers import vm
 from lib import XenAPI
-
 
 # def restore(name, master, username, password, vm_file, auto_start=False, restore=False,
 #             sr=None, sr_map=None, network_map=None, delta=False, base_folder="."):
@@ -62,6 +61,8 @@ from lib import XenAPI
 #         return True
 #
 
+logger = logging.getLogger("Xen restore")
+
 
 def restore(args):
     username = args.username
@@ -76,9 +77,6 @@ def restore(args):
     storage_map = args.storage_map
     if storage_map is not None:
         storage_map = dict(mapping.split("=") for mapping in storage_map)
-
-    logging.config.fileConfig("log.conf")
-    logger = logging.getLogger("Xen backup")
 
     master_url = "https://" + args.master
 
