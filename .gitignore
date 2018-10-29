@@ -110,3 +110,4 @@ ENV/
 mail.json
 config.yml
 data/
+/*.tar.gz
