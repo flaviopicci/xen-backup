@@ -28,9 +28,12 @@ def clean_all(name, master, username, password, excluded_vms=None):
             xapi = session.xenapi
             session_id = session.handle
 
-            for vm in get_vms_to_backup(xapi, master_url, session_id, excluded_vms):
+            vms, _ = get_vms_to_backup(xapi, master_url, session_id, excluded_vms)
+            for vm in vms:
                 for snap in vm.get_backup_snapshots():
                     snap.destroy()
+
+            logger.info("Cleaning backup snapshots in pool %s completed", name)
         finally:
             try:
                 session.xenapi.session.logout()
@@ -63,3 +66,5 @@ def clean(args):
             proc_pool.join()
         except SystemExit:
             logger.warning("Terminating backup")
+    else:
+        logger.info("Clean command available with full backup only")
