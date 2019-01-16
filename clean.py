@@ -1,4 +1,5 @@
 import logging
+import time
 from http.client import CannotSendRequest
 from multiprocessing.pool import Pool
 
@@ -56,6 +57,7 @@ def clean(args):
             backup_procs.append(
                 {"name": pool_config["name"], "result": proc_pool.apply_async(clean_all, kwds=pool_config)})
 
+        time.sleep(0.1)  # Wait for all tasks have been scheduled
         proc_pool.close()
         try:
             proc_pool.join()
