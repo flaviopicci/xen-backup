@@ -210,16 +210,16 @@ class VM(CommonEntities):
             backup_filename = backup_snap.export(base_folder, vm_name=vm_name)
         except Failure as e:
             failed_vms.update({self.ref: self.export_error_template.format("VM", vm_name, vm_uuid, "XenAPI", e)})
-            self.logger.error("XenApi error: %s", e.details)
+            self.logger.error("XenApi error: %s", str(e))
         except HTTPError as e:
             failed_vms.update({self.ref: self.export_error_template.format("VM", vm_name, vm_uuid, "HTTP", e)})
-            self.logger.error("HTTP error: %s", e.details)
+            self.logger.error("HTTP error: %s", str(e))
         except IOError as e:
             failed_vms.update({self.ref: self.export_error_template.format("VM", vm_name, vm_uuid, "Storage", e)})
             if e.errno == errno.ENOSPC:
                 raise e
             else:
-                self.logger.error("Storage error: %s", e.strerror)
+                self.logger.error("Storage error: %s", str(e))
         except SystemExit as e:
             failed_vms.update(
                 {self.ref: self.export_error_template.format("VM", vm_name, vm_uuid, "Generic", "interrupt")})
@@ -293,15 +293,15 @@ class VM(CommonEntities):
         #     self.logger.exception("XenApi error")
         except HTTPError as e:
             failed_vms.update(
-                {self.ref: self.export_error_template.format("VDI of VM", vm_name, vm_uuid, "HTTP", e.reason)})
-            self.logger.error("HTTP error %s", e.reason)
+                {self.ref: self.export_error_template.format("VDI of VM", vm_name, vm_uuid, "HTTP", str(e))})
+            self.logger.error("HTTP error %s", str(e))
         except IOError as e:
             failed_vms.update(
-                {self.ref: self.export_error_template.format("VDI of VM", vm_name, vm_uuid, "Storage", e.strerror)})
+                {self.ref: self.export_error_template.format("VDI of VM", vm_name, vm_uuid, "Storage", str(e))})
             if e.errno == errno.ENOSPC:
                 raise e
             else:
-                self.logger.error("Storage error %s", e.strerror)
+                self.logger.error("Storage error %s", str(e))
         except SystemExit as e:
             failed_vms.update(
                 {self.ref: self.export_error_template.format("VDI of VM", vm_name, vm_uuid, "Generic", "interrupt")})
@@ -356,7 +356,7 @@ class VM(CommonEntities):
             try:
                 os.remove(os.path.join(base_folder, vm_file))
             except IOError as e:
-                self.logger.error("Error deleting VM file %s %s", vm_file, e.strerror)
+                self.logger.error("Error deleting VM file %s %s", vm_file, str(e))
             else:
                 self.logger.debug("VM file %s deleted", vm_file)
 
@@ -380,7 +380,7 @@ class VM(CommonEntities):
                 try:
                     os.remove(os.path.join(base_folder, vm_back_dir, vm_def_file))
                 except IOError as e:
-                    self.logger.error("Error deleting VM definition file %s %s", vm_def_file, e.strerror)
+                    self.logger.error("Error deleting VM definition file %s %s", vm_def_file, str(e))
                 else:
                     self.logger.debug("VM definition file '%s' deleted", os.path.join(vm_back_dir, vm_def_file))
 
@@ -453,7 +453,7 @@ def restore_delta(xapi, master_url, session_id, vm_def_file, base_folder, sr_map
             vif.restore(xapi, vif_record, network_map, restore)
 
     except (HTTPError, IOError, SystemExit, Failure) as e:
-        logger.error("Error restoring VM '%s' %s", vm.get_label(), e.strerror)
+        logger.error("Error restoring VM '%s' %s", vm.get_label(), str(e))
         vm.destroy()
         raise e
     else:

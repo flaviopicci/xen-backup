@@ -1,4 +1,5 @@
-import logging.config
+import logging
+import time
 from http.client import CannotSendRequest
 from multiprocessing.pool import Pool
 
@@ -7,7 +8,6 @@ import yaml
 from handlers.vm import get_vms_to_backup
 from lib import XenAPI
 
-logging.config.fileConfig("log.conf")
 logger = logging.getLogger("Xen backup")
 
 max_subproc = 2
@@ -19,22 +19,26 @@ def clean_all(name, master, username, password, excluded_vms=None):
     session = XenAPI.Session(master_url, ignore_ssl=True)
     try:
         session.xenapi.login_with_password(username, password)
-    except (CannotSendRequest, XenAPI.Failure):
-        logger.exception("Error logging in Xen host")
+    except (CannotSendRequest, XenAPI.Failure) as e:
+        logger.error("Error logging in Xen host")
+        raise e
     else:
         try:
             logger.info("Cleaning backup snapshots in pool %s", name)
             xapi = session.xenapi
             session_id = session.handle
 
-            for vm in get_vms_to_backup(xapi, master_url, session_id, excluded_vms):
+            vms, _ = get_vms_to_backup(xapi, master_url, session_id, excluded_vms)
+            for vm in vms:
                 for snap in vm.get_backup_snapshots():
                     snap.destroy()
+
+            logger.info("Cleaning backup snapshots in pool %s completed", name)
         finally:
             try:
                 session.xenapi.session.logout()
             except (CannotSendRequest, XenAPI.Failure):
-                logger.exception("Xen logout failed")
+                logger.error("Xen logout failed")
 
 
 def clean(args):
@@ -56,8 +60,11 @@ def clean(args):
             backup_procs.append(
                 {"name": pool_config["name"], "result": proc_pool.apply_async(clean_all, kwds=pool_config)})
 
+        time.sleep(0.1)  # Wait for all tasks have been scheduled
         proc_pool.close()
         try:
             proc_pool.join()
         except SystemExit:
             logger.warning("Terminating backup")
+    else:
+        logger.info("Clean command available with full backup only")
