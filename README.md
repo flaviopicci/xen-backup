@@ -27,7 +27,7 @@ and **options** are:
 * -u (--uuid): UUID of the VM(s) to be backupped/exported (it can be specified multiple times)
 * -b (--backups-to-retain): number of backups to retain
 * -s (--shutdown): shutdown VM before exporting
-* -f (--file): file containing the backup to restore
+* -f (--file): file containing the backup definition to restore (.json)
 * -r (--restore): perform a full restore (see restore flag in XenAPI)
 * --network-map: network mapping for restore old_ntw=new_ntw (labels or UUIDs)
 * --storage-map: same as network map but for storage repository mapping
