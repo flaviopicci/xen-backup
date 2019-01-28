@@ -190,7 +190,7 @@ class VM(CommonEntities):
 
         backup_filename = None
 
-        self.logger.info("VM (%d of %d) '%s' --- Performing full backup", num_vm, num_vms, vm_name)
+        self.logger.info("VM (%d of %d) '%s' --- Performing full backup", num_vm + 1, num_vms, vm_name)
 
         delete_snapshot = False
         vm_backup_snaps = self.get_backup_snapshots("base")
