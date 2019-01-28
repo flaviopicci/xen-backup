@@ -1,6 +1,7 @@
 import argparse
 import logging.config
 import signal
+import sys
 
 from backup import backup
 from clean import clean
@@ -56,4 +57,4 @@ if __name__ == "__main__":
         actions[args.action](args)
     except (SystemExit, OSError, XenAPI.Failure, ValueError) as e:
         logger.error(e)
-        exit(1)
+        sys.exit(1)
